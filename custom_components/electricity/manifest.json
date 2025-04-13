@@ -7,8 +7,8 @@
     "config_flow": true,
     "dependencies": [],
     "documentation": "https://github.com/jonas-brauer/template-electricity-provider/",
-    "iot_class": "local_push",
+    "iot_class": "cloud_polling",
     "issue_tracker": "https://github.com/jonas-brauer/template-electricity-provider/issues",
     "requirements": [],
-    "version": "1.0.0"
+    "version": "1.0.1"
   }
