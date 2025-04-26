@@ -1,1 +1,0 @@
-"""Support for Amber Electric."""

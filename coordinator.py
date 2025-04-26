@@ -113,7 +113,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         for d in json['consumptionValues']:
 
                             statistics = []
-                            from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)(hours=1)
+                            from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
 
                             keepSum += d['consumption']
 
