@@ -1,0 +1,17 @@
+{
+  "domain": "bjarekraft",
+  "name": "Bjarekraft",
+  "codeowners": [
+    "@jonas-brauer"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://www.home-assistant.io/integrations/bjk-custom",
+  "homekit": {},
+  "iot_class": "cloud_polling",
+  "quality_scale": "bronze",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": [],
+  "version": "1.0.0"
+}
