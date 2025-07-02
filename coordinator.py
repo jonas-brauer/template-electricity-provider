@@ -76,6 +76,14 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
         This is the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """
+        
+        # Check if current time is between 23:30 and 02:00
+        current_time = datetime.now().time()
+        if (current_time >= datetime.strptime("23:30", "%H:%M").time() or 
+            current_time <= datetime.strptime("02:00", "%H:%M").time()):
+            _LOGGER.debug("Skipping update during restricted hours (23:30-02:00)")
+            # Return the last known data or None
+            return self.data
 
         try:
 
