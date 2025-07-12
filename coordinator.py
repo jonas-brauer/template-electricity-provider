@@ -77,14 +77,6 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
         so entities can quickly look up their data.
         """
         
-        # Check if current time is between 23:30 and 02:00
-        current_time = datetime.now().time()
-        if (current_time >= datetime.strptime("23:30", "%H:%M").time() or 
-            current_time <= datetime.strptime("02:00", "%H:%M").time()):
-            _LOGGER.debug("Skipping update during restricted hours (23:30-02:00)")
-            # Return the last known data or None
-            return self.data
-
         try:
 
             # Note: asyncio.TimeoutError and aiohttp.ClientError are already
@@ -112,11 +104,16 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                         statistic_id = "bjarekraft:grid_consumption"
 
-                        keepSum = 0
-
                         last_stats = await get_instance(self.hass).async_add_executor_job(
                             get_last_statistics, self.hass, 1, statistic_id, True, set()
                         )
+
+                        keepSum = 0
+                        if last_stats and statistic_id in last_stats:
+                            if last_stats[statistic_id] and len(last_stats[statistic_id]) > 0:
+                                keepSum = last_stats[statistic_id][0]["sum"] or 0
+
+                        
 
                         for d in json['consumptionValues']:
 
