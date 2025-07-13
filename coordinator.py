@@ -39,6 +39,14 @@ from .const import DOMAIN, CONF_TOKEN, UTILITY_ID, BASE_URL
 
 _LOGGER = logging.getLogger(__name__)
 
+class ApiAuthError(Exception):
+    """Exception raised for authentication errors."""
+    pass
+
+class ApiError(Exception):
+    """Exception raised for general API errors."""
+    pass
+
 class BjarekraftCoordinator(DataUpdateCoordinator):
     """My custom coordinator."""
 
@@ -111,7 +119,8 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         keepSum = 0
                         if last_stats and statistic_id in last_stats:
                             if last_stats[statistic_id] and len(last_stats[statistic_id]) > 0:
-                                keepSum = last_stats[statistic_id][0]["sum"] or 0
+                                if "sum" in last_stats[statistic_id][0]:
+                                    keepSum = last_stats[statistic_id][0]["sum"] or 0
 
                         
 
