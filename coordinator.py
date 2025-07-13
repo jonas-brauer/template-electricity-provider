@@ -100,8 +100,8 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                 }
                 async with aiohttp.ClientSession(headers=headers) as session:
                     print(self.config_entry.as_dict)
-                    dateLower = datetime.now() - timedelta(hours=25, minutes=0)
-                    dateUpper = datetime.now() + timedelta(hours=24)
+                    dateLower = datetime.now() - timedelta(hours=49, minutes=0)
+                    dateUpper = datetime.now() + timedelta(hours=25)
                     url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
                     _LOGGER.debug("Calling")
                     _LOGGER.debug(url)
