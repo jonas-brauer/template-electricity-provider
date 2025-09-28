@@ -104,7 +104,8 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     keepSum = 0
 
                     # Fetch all data from beginning of year, day by day
-                    start_date = datetime(datetime.now().year, 1, 1)
+                    #start_date = datetime(datetime.now().year, 1, 1)
+                    start_date = datetime.now() + timedelta(days=60)
                     end_date = datetime.now()
 
                     # Create metadata once, it's the same for all statistics
