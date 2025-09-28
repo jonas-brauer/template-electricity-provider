@@ -107,6 +107,19 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     start_date = datetime(datetime.now().year, 1, 1)
                     end_date = datetime.now()
 
+                    # Create metadata once, it's the same for all statistics
+                    metadata = StatisticMetaData(
+                        mean_type=StatisticMeanType.NONE,
+                        has_sum=True,
+                        name=f"1",
+                        source="bjarekraft",
+                        statistic_id=statistic_id,
+                        unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    )
+
+                    # Collect all statistics in one list to add them in chronological order
+                    all_statistics = []
+
                     current_date = start_date
                     while current_date <= end_date:
                         dateLower = current_date
@@ -118,36 +131,38 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                             async with session.get(url) as response:
                                 if response.status == 200:
                                     json_day = await response.json()
-                                    if 'consumptionValues' in json_day:
+                                    if 'consumptionValues' in json_day and json_day['consumptionValues']:
+                                        # Process all consumption values for this day
+                                        day_count = 0
                                         for d in json_day['consumptionValues']:
-                                            statistics = []
                                             from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
                                             keepSum += d['consumption']
 
-                                            statistics.append(
+                                            all_statistics.append(
                                                 StatisticData(
                                                     start=from_time,
                                                     state=d['consumption'],
                                                     sum=keepSum,
                                                 )
                                             )
+                                            day_count += 1
 
-                                            if statistics:
-                                                metadata = StatisticMetaData(
-                                                    mean_type=StatisticMeanType.NONE,
-                                                    has_sum=True,
-                                                    name=f"1",
-                                                    source="bjarekraft",
-                                                    statistic_id=statistic_id,
-                                                    unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-                                                )
-                                                async_add_external_statistics(self.hass, metadata, statistics)
+                                        _LOGGER.debug(f"Loaded {day_count} consumption values for {current_date.strftime('%Y-%m-%d')}")
+                                else:
+                                    _LOGGER.warning(f"API returned status {response.status} for {current_date.strftime('%Y-%m-%d')}")
                         except Exception as e:
                             _LOGGER.error(f"Failed to fetch historical data for {current_date.strftime('%Y-%m-%d')}: {e}")
 
                         current_date += timedelta(days=1)
                         # Add a small delay to avoid overwhelming the API
                         await asyncio.sleep(0.1)
+
+                    # Add all statistics in one batch
+                    if all_statistics:
+                        _LOGGER.info(f"Adding {len(all_statistics)} historical statistics to database")
+                        async_add_external_statistics(self.hass, metadata, all_statistics)
+                    else:
+                        _LOGGER.warning("No historical statistics to add")
 
                     _LOGGER.info(f"Historical data load completed")
 
