@@ -124,10 +124,22 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                         
 
+                        # Only process new data points that haven't been stored yet
+                        # Get the timestamp of the last stored statistic
+                        last_timestamp = None
+                        if last_stats and statistic_id in last_stats:
+                            if last_stats[statistic_id] and len(last_stats[statistic_id]) > 0:
+                                if "start" in last_stats[statistic_id][0]:
+                                    last_timestamp = last_stats[statistic_id][0]["start"]
+
                         for d in json['consumptionValues']:
 
                             statistics = []
                             from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
+
+                            # Skip data points that are already stored (older than or equal to last timestamp)
+                            if last_timestamp and from_time <= last_timestamp:
+                                continue
 
                             keepSum += d['consumption']
 
@@ -139,15 +151,17 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                 )
                             )
 
-                            metadata = StatisticMetaData(
-                                    mean_type=StatisticMeanType.NONE,
-                                    has_sum=True,
-                                    name=f"1",
-                                    source="bjarekraft",
-                                    statistic_id=statistic_id,
-                                    unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-                                )
-                            async_add_external_statistics(self.hass, metadata, statistics)
+                            # Only add statistics if we have new data to add
+                            if statistics:
+                                metadata = StatisticMetaData(
+                                        mean_type=StatisticMeanType.NONE,
+                                        has_sum=True,
+                                        name=f"1",
+                                        source="bjarekraft",
+                                        statistic_id=statistic_id,
+                                        unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                                    )
+                                async_add_external_statistics(self.hass, metadata, statistics)
 
                             # if date < fifteenMinutesAgo and date > thirtyMinutesAgo:
                             #     print("Adding: ")
