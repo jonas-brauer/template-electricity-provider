@@ -125,7 +125,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         dateLower = current_date
                         dateUpper = current_date
                         url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
-                        _LOGGER.debug(f"Loading historical data for {current_date.strftime('%Y-%m-%d')}")
+                        _LOGGER.error(f"Loading historical data for {current_date.strftime('%Y-%m-%d')}")
 
                         try:
                             async with session.get(url) as response:
