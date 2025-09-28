@@ -181,8 +181,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
         This is the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """
-        self._load_historical_data()
-        
+
         try:
 
             # Note: asyncio.TimeoutError and aiohttp.ClientError are already
@@ -204,6 +203,15 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         get_last_statistics, self.hass, 1, statistic_id, True, set()
                     )
 
+                    # If no previous data exists, load historical data first
+                    if not last_stats or statistic_id not in last_stats or not last_stats[statistic_id]:
+                        _LOGGER.info("No existing statistics found in _async_update_data, loading historical data")
+                        await self._load_historical_data()
+
+                        # Get the updated last statistics after loading historical data
+                        last_stats = await get_instance(self.hass).async_add_executor_job(
+                            get_last_statistics, self.hass, 1, statistic_id, True, set()
+                        )
 
                     keepSum = 0
                     last_timestamp = None
