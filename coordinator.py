@@ -100,81 +100,98 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                 }
                 async with aiohttp.ClientSession(headers=headers) as session:
                     print(self.config_entry.as_dict)
-                    dateLower = datetime.now() - timedelta(hours=49, minutes=0)
-                    dateUpper = datetime.now() + timedelta(hours=25)
-                    url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
-                    _LOGGER.debug("Calling")
-                    _LOGGER.debug(url)
-                    async with session.get(url) as response:
 
-                        json = await response.json()
-                        # print(json)
+                    statistic_id = "bjarekraft:grid_consumption"
 
-                        statistic_id = "bjarekraft:grid_consumption"
+                    # Check if we have existing statistics
+                    last_stats = await get_instance(self.hass).async_add_executor_job(
+                        get_last_statistics, self.hass, 1, statistic_id, True, set()
+                    )
 
-                        last_stats = await get_instance(self.hass).async_add_executor_job(
-                            get_last_statistics, self.hass, 1, statistic_id, True, set()
+                    keepSum = 0
+                    last_timestamp = None
+
+                    if last_stats and statistic_id in last_stats:
+                        if last_stats[statistic_id] and len(last_stats[statistic_id]) > 0:
+                            if "sum" in last_stats[statistic_id][0]:
+                                keepSum = last_stats[statistic_id][0]["sum"] or 0
+                            if "start" in last_stats[statistic_id][0]:
+                                last_timestamp = last_stats[statistic_id][0]["start"]
+
+                    all_json_data = {'consumptionValues': []}
+
+                    # Determine if this is first import
+                    is_first_import = last_timestamp is None
+
+                    if is_first_import:
+                        # First import - fetch all data from beginning of year, day by day
+                        start_date = datetime(datetime.now().year, 1, 1)
+                        end_date = datetime.now()
+                        _LOGGER.info(f"First import detected, fetching all data from {start_date.strftime('%Y-%m-%d')}")
+
+                        current_date = start_date
+                        while current_date <= end_date:
+                            dateLower = current_date
+                            dateUpper = current_date
+                            url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
+                            _LOGGER.debug(f"Fetching data for {current_date.strftime('%Y-%m-%d')}")
+
+                            try:
+                                async with session.get(url) as response:
+                                    if response.status == 200:
+                                        json_day = await response.json()
+                                        if 'consumptionValues' in json_day:
+                                            all_json_data['consumptionValues'].extend(json_day['consumptionValues'])
+                            except Exception as e:
+                                _LOGGER.error(f"Failed to fetch data for {current_date.strftime('%Y-%m-%d')}: {e}")
+
+                            current_date += timedelta(days=1)
+
+                            # Add a small delay to avoid overwhelming the API
+                            await asyncio.sleep(0.1)
+                    else:
+                        # Regular update - fetch only recent data
+                        dateLower = datetime.now() - timedelta(hours=49, minutes=0)
+                        dateUpper = datetime.now() + timedelta(hours=25)
+                        url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
+                        _LOGGER.debug("Calling")
+                        _LOGGER.debug(url)
+                        async with session.get(url) as response:
+                            all_json_data = await response.json()
+
+                    # Process the fetched data
+                    for d in all_json_data['consumptionValues']:
+                        statistics = []
+                        from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
+
+                        # Skip data points that are already stored (older than or equal to last timestamp)
+                        if last_timestamp and from_time <= last_timestamp:
+                            continue
+
+                        keepSum += d['consumption']
+
+                        statistics.append(
+                            StatisticData(
+                                start=from_time,
+                                state=d['consumption'],
+                                sum=keepSum,
+                            )
                         )
 
-                        keepSum = 0
-                        if last_stats and statistic_id in last_stats:
-                            if last_stats[statistic_id] and len(last_stats[statistic_id]) > 0:
-                                if "sum" in last_stats[statistic_id][0]:
-                                    keepSum = last_stats[statistic_id][0]["sum"] or 0
-
-                        
-
-                        # Only process new data points that haven't been stored yet
-                        # Get the timestamp of the last stored statistic
-                        last_timestamp = None
-                        if last_stats and statistic_id in last_stats:
-                            if last_stats[statistic_id] and len(last_stats[statistic_id]) > 0:
-                                if "start" in last_stats[statistic_id][0]:
-                                    last_timestamp = last_stats[statistic_id][0]["start"]
-
-                        for d in json['consumptionValues']:
-
-                            statistics = []
-                            from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
-
-                            # Skip data points that are already stored (older than or equal to last timestamp)
-                            if last_timestamp and from_time <= last_timestamp:
-                                continue
-
-                            keepSum += d['consumption']
-
-                            statistics.append(
-                                StatisticData(
-                                    start=from_time,
-                                    state=d['consumption'],
-                                    sum=keepSum,
+                        # Only add statistics if we have new data to add
+                        if statistics:
+                            metadata = StatisticMetaData(
+                                    mean_type=StatisticMeanType.NONE,
+                                    has_sum=True,
+                                    name=f"1",
+                                    source="bjarekraft",
+                                    statistic_id=statistic_id,
+                                    unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
                                 )
-                            )
-
-                            # Only add statistics if we have new data to add
-                            if statistics:
-                                metadata = StatisticMetaData(
-                                        mean_type=StatisticMeanType.NONE,
-                                        has_sum=True,
-                                        name=f"1",
-                                        source="bjarekraft",
-                                        statistic_id=statistic_id,
-                                        unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-                                    )
-                                async_add_external_statistics(self.hass, metadata, statistics)
-
-                            # if date < fifteenMinutesAgo and date > thirtyMinutesAgo:
-                            #     print("Adding: ")
-                            #     print(d["consumption"])
-                            #     print(d["date"])
-                            #     # self._attr_native_value = int(self._attr_native_value or 0) + d['consumption']
-                            #     # self.async_write_ha_state()
-                            # else:
-                            #     print('not in window')
-
+                            async_add_external_statistics(self.hass, metadata, statistics)
 
                 # print(response)
-                return json
+                return all_json_data
                 # return await self.my_api.fetch_data(listening_idx)
         except ApiAuthError as err:
             # Raising ConfigEntryAuthFailed will cancel future updates
