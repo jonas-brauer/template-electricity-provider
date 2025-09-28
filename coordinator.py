@@ -92,6 +92,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
     async def _load_historical_data(self):
         """Load all historical data from beginning of year."""
+        _LOGGER.error("Loading from beginning")
         try:
             async with async_timeout.timeout(600):  # 10 minute timeout for initial load
                 headers = {
