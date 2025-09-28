@@ -181,6 +181,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
         This is the place to pre-process the data to lookup tables
         so entities can quickly look up their data.
         """
+        self._load_historical_data()
         
         try:
 
