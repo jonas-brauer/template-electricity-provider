@@ -75,8 +75,88 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
         This method will be called automatically during
         coordinator.async_config_entry_first_refresh.
         """
+        # Load initial data from beginning of year if no data exists
+        statistic_id = "bjarekraft:grid_consumption"
 
-        # self._device = await self.my_api.get_device()
+        # Check if we have existing statistics
+        last_stats = await get_instance(self.hass).async_add_executor_job(
+            get_last_statistics, self.hass, 1, statistic_id, True, set()
+        )
+
+        # Only load historical data if this is first setup (no existing statistics)
+        if not last_stats or statistic_id not in last_stats or not last_stats[statistic_id]:
+            _LOGGER.info("First setup detected, loading historical data from beginning of year")
+            await self._load_historical_data()
+        else:
+            _LOGGER.debug("Existing statistics found, skipping historical data load")
+
+    async def _load_historical_data(self):
+        """Load all historical data from beginning of year."""
+        try:
+            async with async_timeout.timeout(300):  # 5 minute timeout for initial load
+                headers = {
+                    "Authorization": "Bearer " + CONF_TOKEN,
+                    "User-Agent": "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+                }
+
+                async with aiohttp.ClientSession(headers=headers) as session:
+                    statistic_id = "bjarekraft:grid_consumption"
+                    keepSum = 0
+
+                    # Fetch all data from beginning of year, day by day
+                    start_date = datetime(datetime.now().year, 1, 1)
+                    end_date = datetime.now()
+
+                    current_date = start_date
+                    while current_date <= end_date:
+                        dateLower = current_date
+                        dateUpper = current_date
+                        url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
+                        _LOGGER.debug(f"Loading historical data for {current_date.strftime('%Y-%m-%d')}")
+
+                        try:
+                            async with session.get(url) as response:
+                                if response.status == 200:
+                                    json_day = await response.json()
+                                    if 'consumptionValues' in json_day:
+                                        for d in json_day['consumptionValues']:
+                                            statistics = []
+                                            from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
+                                            keepSum += d['consumption']
+
+                                            statistics.append(
+                                                StatisticData(
+                                                    start=from_time,
+                                                    state=d['consumption'],
+                                                    sum=keepSum,
+                                                )
+                                            )
+
+                                            if statistics:
+                                                metadata = StatisticMetaData(
+                                                    mean_type=StatisticMeanType.NONE,
+                                                    has_sum=True,
+                                                    name=f"1",
+                                                    source="bjarekraft",
+                                                    statistic_id=statistic_id,
+                                                    unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                                                )
+                                                async_add_external_statistics(self.hass, metadata, statistics)
+                        except Exception as e:
+                            _LOGGER.error(f"Failed to fetch historical data for {current_date.strftime('%Y-%m-%d')}: {e}")
+
+                        current_date += timedelta(days=1)
+                        # Add a small delay to avoid overwhelming the API
+                        await asyncio.sleep(0.1)
+
+                    _LOGGER.info(f"Historical data load completed")
+
+        except asyncio.TimeoutError:
+            _LOGGER.error("Timeout while loading historical data")
+            raise UpdateFailed("Timeout loading historical data")
+        except Exception as err:
+            _LOGGER.error(f"Error loading historical data: {err}")
+            raise UpdateFailed(f"Error loading historical data: {err}")
 
     async def _async_update_data(self):
         """Fetch data from API endpoint.
@@ -99,11 +179,9 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     "User-Agent": "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
                 }
                 async with aiohttp.ClientSession(headers=headers) as session:
-                    print(self.config_entry.as_dict)
-
                     statistic_id = "bjarekraft:grid_consumption"
 
-                    # Check if we have existing statistics
+                    # Get the last statistics to continue from where we left off
                     last_stats = await get_instance(self.hass).async_add_executor_job(
                         get_last_statistics, self.hass, 1, statistic_id, True, set()
                     )
@@ -118,49 +196,18 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                             if "start" in last_stats[statistic_id][0]:
                                 last_timestamp = last_stats[statistic_id][0]["start"]
 
-                    all_json_data = {'consumptionValues': []}
+                    # Regular update - fetch only recent data
+                    dateLower = datetime.now() - timedelta(hours=49, minutes=0)
+                    dateUpper = datetime.now() + timedelta(hours=25)
+                    url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
+                    _LOGGER.debug("Calling")
+                    _LOGGER.debug(url)
 
-                    # Determine if this is first import
-                    is_first_import = last_timestamp is None
+                    async with session.get(url) as response:
+                        json_data = await response.json()
 
-                    if is_first_import:
-                        # First import - fetch all data from beginning of year, day by day
-                        start_date = datetime(datetime.now().year, 1, 1)
-                        end_date = datetime.now()
-                        _LOGGER.info(f"First import detected, fetching all data from {start_date.strftime('%Y-%m-%d')}")
-
-                        current_date = start_date
-                        while current_date <= end_date:
-                            dateLower = current_date
-                            dateUpper = current_date
-                            url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
-                            _LOGGER.debug(f"Fetching data for {current_date.strftime('%Y-%m-%d')}")
-
-                            try:
-                                async with session.get(url) as response:
-                                    if response.status == 200:
-                                        json_day = await response.json()
-                                        if 'consumptionValues' in json_day:
-                                            all_json_data['consumptionValues'].extend(json_day['consumptionValues'])
-                            except Exception as e:
-                                _LOGGER.error(f"Failed to fetch data for {current_date.strftime('%Y-%m-%d')}: {e}")
-
-                            current_date += timedelta(days=1)
-
-                            # Add a small delay to avoid overwhelming the API
-                            await asyncio.sleep(0.1)
-                    else:
-                        # Regular update - fetch only recent data
-                        dateLower = datetime.now() - timedelta(hours=49, minutes=0)
-                        dateUpper = datetime.now() + timedelta(hours=25)
-                        url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
-                        _LOGGER.debug("Calling")
-                        _LOGGER.debug(url)
-                        async with session.get(url) as response:
-                            all_json_data = await response.json()
-
-                    # Process the fetched data
-                    for d in all_json_data['consumptionValues']:
+                    # Process only new data points
+                    for d in json_data['consumptionValues']:
                         statistics = []
                         from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
 
@@ -190,8 +237,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                 )
                             async_add_external_statistics(self.hass, metadata, statistics)
 
-                # print(response)
-                return all_json_data
+                return json_data
                 # return await self.my_api.fetch_data(listening_idx)
         except ApiAuthError as err:
             # Raising ConfigEntryAuthFailed will cancel future updates
