@@ -231,7 +231,8 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
 
                         # Skip data points that are already stored (older than or equal to last timestamp)
-                        if last_timestamp and from_time <= last_timestamp:
+                        # Convert datetime to timestamp for comparison (last_timestamp is a float)
+                        if last_timestamp and from_time.timestamp() <= last_timestamp:
                             continue
 
                         keepSum += d['consumption']
