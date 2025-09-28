@@ -93,7 +93,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
     async def _load_historical_data(self):
         """Load all historical data from beginning of year."""
         try:
-            async with async_timeout.timeout(300):  # 5 minute timeout for initial load
+            async with async_timeout.timeout(600):  # 10 minute timeout for initial load
                 headers = {
                     "Authorization": "Bearer " + CONF_TOKEN,
                     "User-Agent": "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
@@ -105,7 +105,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                     # Fetch all data from beginning of year, day by day
                     #start_date = datetime(datetime.now().year, 1, 1)
-                    start_date = datetime.now() - timedelta(days=60)
+                    start_date = datetime.now() - timedelta(days=30)
                     end_date = datetime.now()
 
                     # Create metadata once, it's the same for all statistics
@@ -126,10 +126,10 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         dateLower = current_date
                         dateUpper = current_date
                         url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
-                        _LOGGER.error(f"Loading historical data for {current_date.strftime('%Y-%m-%d')}")
+                        _LOGGER.debug(f"Loading historical data for {current_date.strftime('%Y-%m-%d')}")
 
                         try:
-                            async with session.get(url) as response:
+                            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
                                 if response.status == 200:
                                     json_day = await response.json()
                                     if 'consumptionValues' in json_day and json_day['consumptionValues']:
@@ -155,8 +155,8 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                             _LOGGER.error(f"Failed to fetch historical data for {current_date.strftime('%Y-%m-%d')}: {e}")
 
                         current_date += timedelta(days=1)
-                        # Add a small delay to avoid overwhelming the API
-                        await asyncio.sleep(0.1)
+                        # Add a delay to avoid overwhelming the API - rate limit to prevent timeout
+                        await asyncio.sleep(1.0)  # 1 second delay between requests
 
                     # Add all statistics in one batch
                     if all_statistics:
