@@ -148,7 +148,11 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                             # Process all consumption values for this day
                                             day_count = 0
                                             for d in json_day['consumptionValues']:
-                                                from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
+                                                # Parse the date - API returns like "2025-09-01T00:00:00"
+                                                from_time = dt_util.parse_datetime(d['date'])
+                                                if from_time is None:
+                                                    _LOGGER.error(f"Failed to parse date: {d['date']}")
+                                                    continue
                                                 keepSum += d['consumption']
 
                                                 all_statistics.append(
@@ -255,7 +259,11 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     # Process only new data points
                     for d in json_data['consumptionValues']:
                         statistics = []
-                        from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
+                        # Parse the date - API returns like "2025-09-01T00:00:00"
+                        from_time = dt_util.parse_datetime(d['date'])
+                        if from_time is None:
+                            _LOGGER.error(f"Failed to parse date: {d['date']}")
+                            continue
 
                         # Skip data points that are already stored (older than or equal to last timestamp)
                         # Convert datetime to timestamp for comparison (last_timestamp is a float)
