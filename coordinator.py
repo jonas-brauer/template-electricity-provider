@@ -136,7 +136,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         dateUpper = datetime.combine(current_date, datetime.max.time().replace(microsecond=0)) + timedelta(days=1)
 
                         # API expects format like "2025-01-01" for both dates
-                        url = BASE_URL + UTILITY_ID + "/BJR/1/" + current_date.strftime("%Y-%m-%d") + "/" + current_date.strftime("%Y-%m-%d") + "/1/1"
+                        url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
                         _LOGGER.error(f"URL: {url}")
                         _LOGGER.error(f"Fetching data for {dateLower.strftime('%Y-%m-%d')} - {dateUpper.strftime('%Y-%m-%d')}")
 
