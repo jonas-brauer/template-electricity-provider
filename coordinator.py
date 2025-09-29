@@ -165,6 +165,10 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                                 if from_time is None:
                                                     _LOGGER.error(f"Failed to parse date: {d['date']}")
                                                     continue
+
+                                                # Ensure datetime has timezone info (assume local timezone if none)
+                                                if from_time.tzinfo is None:
+                                                    from_time = dt_util.as_local(from_time)
                                                 keepSum += d['consumption']
 
                                                 all_statistics.append(
@@ -289,6 +293,10 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         if from_time is None:
                             _LOGGER.error(f"Failed to parse date: {d['date']}")
                             continue
+
+                        # Ensure datetime has timezone info (assume local timezone if none)
+                        if from_time.tzinfo is None:
+                            from_time = dt_util.as_local(from_time)
 
                         # Skip data points that are already stored (older than or equal to last timestamp)
                         # Convert datetime to timestamp for comparison (last_timestamp is a float)
