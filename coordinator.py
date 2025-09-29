@@ -133,7 +133,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     while current_date <= end:
                         # Use start of day (00:00) and end of day (23:59) for the same date
                         dateLower = datetime.combine(current_date, datetime.min.time())
-                        dateUpper = datetime.combine(current_date, datetime.max.time().replace(microsecond=0))
+                        dateUpper = datetime.combine(current_date, datetime.max.time().replace(microsecond=0)) + timedelta(days=1)
 
                         # API expects format like "2025-01-01" for both dates
                         url = BASE_URL + UTILITY_ID + "/BJR/1/" + current_date.strftime("%Y-%m-%d") + "/" + current_date.strftime("%Y-%m-%d") + "/1/1"
