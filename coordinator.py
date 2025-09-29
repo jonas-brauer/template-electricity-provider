@@ -134,7 +134,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         dateLower = current_date
                         dateUpper = current_date
                         url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
-                        _LOGGER.error(f"Loading historical data for {current_date.strftime('%Y-%m-%d')} {random.randInt(0, 1000)}")
+                        _LOGGER.error(f"Loading historical data for {current_date.strftime('%Y-%m-%d')} {random.randint(0, 1000)}")
                         _LOGGER.error(url)
 
                         try:
