@@ -170,7 +170,9 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     # Add all statistics in one batch
                     if all_statistics:
                         _LOGGER.info(f"Adding {len(all_statistics)} historical statistics to database")
-                        async_add_external_statistics(self.hass, metadata, all_statistics)
+                        await get_instance(self.hass).async_add_executor_job(
+                            async_add_external_statistics, self.hass, metadata, all_statistics
+                        )
                     else:
                         _LOGGER.error("No historical statistics to add")
 
@@ -272,7 +274,9 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                     statistic_id=statistic_id,
                                     unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
                                 )
-                            async_add_external_statistics(self.hass, metadata, statistics)
+                            await get_instance(self.hass).async_add_executor_job(
+                                async_add_external_statistics, self.hass, metadata, statistics
+                            )
 
                 return json_data
                 # return await self.my_api.fetch_data(listening_idx)
