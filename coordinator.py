@@ -141,23 +141,30 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                             async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
                                 if response.status == 200:
                                     json_day = await response.json()
-                                    if 'consumptionValues' in json_day and json_day['consumptionValues']:
-                                        # Process all consumption values for this day
-                                        day_count = 0
-                                        for d in json_day['consumptionValues']:
-                                            from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
-                                            keepSum += d['consumption']
+                                    _LOGGER.error(f"Response keys: {json_day.keys() if json_day else 'None'}")
+                                    if 'consumptionValues' in json_day:
+                                        _LOGGER.error(f"Found {len(json_day['consumptionValues'])} consumption values for {current_date.strftime('%Y-%m-%d')}")
+                                        if json_day['consumptionValues']:
+                                            # Process all consumption values for this day
+                                            day_count = 0
+                                            for d in json_day['consumptionValues']:
+                                                from_time = dt_util.parse_datetime(d['date']+'+0100') - timedelta(hours=1)
+                                                keepSum += d['consumption']
 
-                                            all_statistics.append(
-                                                StatisticData(
-                                                    start=from_time,
-                                                    state=d['consumption'],
-                                                    sum=keepSum,
+                                                all_statistics.append(
+                                                    StatisticData(
+                                                        start=from_time,
+                                                        state=d['consumption'],
+                                                        sum=keepSum,
+                                                    )
                                                 )
-                                            )
-                                            day_count += 1
+                                                day_count += 1
 
-                                        _LOGGER.debug(f"Loaded {day_count} consumption values for {current_date.strftime('%Y-%m-%d')}")
+                                            _LOGGER.error(f"Added {day_count} values to all_statistics (total now: {len(all_statistics)})")
+                                        else:
+                                            _LOGGER.error(f"consumptionValues is empty for {current_date.strftime('%Y-%m-%d')}")
+                                    else:
+                                        _LOGGER.error(f"No consumptionValues key in response for {current_date.strftime('%Y-%m-%d')}")
                                 else:
                                     _LOGGER.error(f"API returned status {response.status} for {current_date.strftime('%Y-%m-%d')}")
                         except Exception as e:
@@ -168,6 +175,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         await asyncio.sleep(1.0)  # 1 second delay between requests
 
                     # Add all statistics in one batch
+                    _LOGGER.error(f"Total statistics collected: {len(all_statistics)}")
                     if all_statistics:
                         _LOGGER.info(f"Adding {len(all_statistics)} historical statistics to database")
                         await get_instance(self.hass).async_add_executor_job(
