@@ -92,13 +92,13 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
     async def _load_historical_data(self):
         """Load all historical data from beginning of year."""
-        _LOGGER.error("Loading from beginning")
         try:
             async with async_timeout.timeout(600):  # 10 minute timeout for initial load
                 headers = {
                     "Authorization": "Bearer " + CONF_TOKEN,
                     "User-Agent": "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
                 }
+                
 
                 async with aiohttp.ClientSession(headers=headers) as session:
                     statistic_id = "bjarekraft:grid_consumption"
@@ -108,6 +108,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     #start_date = datetime(datetime.now().year, 1, 1)
                     start_date = datetime.now() - timedelta(days=30)
                     end_date = datetime.now()
+                    
 
                     # Create metadata once, it's the same for all statistics
                     metadata = StatisticMetaData(
@@ -123,11 +124,17 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     all_statistics = []
 
                     current_date = start_date
+                    _LOGGER.error(f"Current_date{current_date}")
+
                     while current_date <= end_date:
+                        _LOGGER.error(f"Current_date{current_date}")
+                        _LOGGER.error(f"Enddate {end_date}")
+
                         dateLower = current_date
                         dateUpper = current_date
                         url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
                         _LOGGER.debug(f"Loading historical data for {current_date.strftime('%Y-%m-%d')}")
+                        _LOGGER.error(url)
 
                         try:
                             async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
@@ -151,7 +158,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                                         _LOGGER.debug(f"Loaded {day_count} consumption values for {current_date.strftime('%Y-%m-%d')}")
                                 else:
-                                    _LOGGER.warning(f"API returned status {response.status} for {current_date.strftime('%Y-%m-%d')}")
+                                    _LOGGER.error(f"API returned status {response.status} for {current_date.strftime('%Y-%m-%d')}")
                         except Exception as e:
                             _LOGGER.error(f"Failed to fetch historical data for {current_date.strftime('%Y-%m-%d')}: {e}")
 
@@ -164,9 +171,9 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         _LOGGER.info(f"Adding {len(all_statistics)} historical statistics to database")
                         async_add_external_statistics(self.hass, metadata, all_statistics)
                     else:
-                        _LOGGER.warning("No historical statistics to add")
+                        _LOGGER.error("No historical statistics to add")
 
-                    _LOGGER.info(f"Historical data load completed")
+                    _LOGGER.error(f"Historical data load completed")
 
         except asyncio.TimeoutError:
             _LOGGER.error("Timeout while loading historical data")
