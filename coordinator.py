@@ -151,7 +151,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                                     _LOGGER.error(f"Response keys: {list(json_day.keys()) if json_day else 'None'}")
                                     _LOGGER.error(f"Response: {json_day}")
-                                    _LOGGER.err(f"{json_data['consumptionValues']}")
+                                    _LOGGER.error(f"consumptionValues: {json_day.get('consumptionValues', 'Not found')}")
 
                                     if 'consumptionValues' in json_day:
                                         _LOGGER.error(f"Found {len(json_day['consumptionValues'])} consumption values for {current_date}")
@@ -257,19 +257,31 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                             if "start" in last_stats[statistic_id][0]:
                                 last_timestamp = last_stats[statistic_id][0]["start"]
 
-                    # Regular update - fetch only recent data
-                    dateLower = datetime.now() - timedelta(hours=49, minutes=0)
-                    dateUpper = datetime.now() + timedelta(hours=25)
-                    url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
-                    _LOGGER.error(url)
-                    _LOGGER.error("Calling")
-                    _LOGGER.error(url)
+                    # Regular update - fetch recent data day by day (API requires same day)
+                    # Fetch yesterday and today
+                    today = datetime.now().date()
+                    yesterday = today - timedelta(days=1)
 
-                    async with session.get(url) as response:
-                        json_data = await response.json()
+                    all_recent_data = []
+
+                    for fetch_date in [yesterday, today]:
+                        url = BASE_URL + UTILITY_ID + "/BJR/1/" + fetch_date.strftime("%Y-%m-%d") + "/" + fetch_date.strftime("%Y-%m-%d") + "/1/1"
+                        _LOGGER.debug(f"Fetching recent data for {fetch_date}")
+
+                        try:
+                            async with session.get(url) as response:
+                                if response.status == 200:
+                                    json_data = await response.json()
+                                    if 'consumptionValues' in json_data and json_data['consumptionValues']:
+                                        all_recent_data.extend(json_data['consumptionValues'])
+                                        _LOGGER.debug(f"Found {len(json_data['consumptionValues'])} values for {fetch_date}")
+                                else:
+                                    _LOGGER.warning(f"API returned status {response.status} for {fetch_date}")
+                        except Exception as e:
+                            _LOGGER.error(f"Failed to fetch recent data for {fetch_date}: {e}")
 
                     # Process only new data points
-                    for d in json_data['consumptionValues']:
+                    for d in all_recent_data:
                         statistics = []
                         # Parse the date - API returns like "2025-09-01T00:00:00"
                         from_time = dt_util.parse_datetime(d['date'])
