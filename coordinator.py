@@ -89,7 +89,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
             _LOGGER.info("First setup detected, loading historical data from beginning of year")
             await self._load_historical_data()
         else:
-            _LOGGER.debug("Existing statistics found, skipping historical data load")
+            _LOGGER.error("Existing statistics found, skipping historical data load")
 
     async def _load_historical_data(self):
         """Load all historical data from beginning of year."""
@@ -137,22 +137,22 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                         # API expects format like "2025-01-01" for both dates
                         url = BASE_URL + UTILITY_ID + "/BJR/1/" + current_date.strftime("%Y-%m-%d") + "/" + current_date.strftime("%Y-%m-%d") + "/1/1"
-                        _LOGGER.debug(f"Fetching data for {current_date.strftime('%Y-%m-%d')}")
+                        _LOGGER.error(f"Fetching data for {current_date.strftime('%Y-%m-%d')}")
 
                         try:
                             async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
                                 if response.status == 200:
                                     response_text = await response.text()
-                                    _LOGGER.debug(f"Response length for {current_date}: {len(response_text)} chars")
+                                    _LOGGER.error(f"Response length for {current_date}: {len(response_text)} chars")
 
                                     # Parse JSON from text
                                     import json as json_module
                                     json_day = json_module.loads(response_text)
 
-                                    _LOGGER.debug(f"Response keys: {list(json_day.keys()) if json_day else 'None'}")
+                                    _LOGGER.error(f"Response keys: {list(json_day.keys()) if json_day else 'None'}")
 
                                     if 'consumptionValues' in json_day:
-                                        _LOGGER.debug(f"Found {len(json_day['consumptionValues'])} consumption values for {current_date}")
+                                        _LOGGER.error(f"Found {len(json_day['consumptionValues'])} consumption values for {current_date}")
                                         if json_day['consumptionValues']:
                                             # Process all consumption values for this day
                                             day_count = 0
@@ -173,7 +173,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                                 )
                                                 day_count += 1
 
-                                            _LOGGER.debug(f"Added {day_count} values for {current_date} (total: {len(all_statistics)})")
+                                            _LOGGER.error(f"Added {day_count} values for {current_date} (total: {len(all_statistics)})")
                                         else:
                                             _LOGGER.warning(f"consumptionValues is empty for {current_date}")
                                     else:
@@ -260,8 +260,8 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     dateUpper = datetime.now() + timedelta(hours=25)
                     url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
                     _LOGGER.error(url)
-                    _LOGGER.debug("Calling")
-                    _LOGGER.debug(url)
+                    _LOGGER.error("Calling")
+                    _LOGGER.error(url)
 
                     async with session.get(url) as response:
                         json_data = await response.json()
