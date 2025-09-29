@@ -121,14 +121,13 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
                     )
 
-                    # Collect all statistics in one list to add them in chronological order
-                    all_statistics = []
-
                     # Fetch historical data day by day (API requires dates to be on same day)
                     _LOGGER.error(f"Fetching historical data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
 
                     current_date = start_date.date() if hasattr(start_date, 'date') else start_date
                     end = end_date.date() if hasattr(end_date, 'date') else end_date
+
+                    total_processed = 0
 
                     while current_date <= end:
                         # Use start of day (00:00) and end of day (23:59) for the same date
@@ -158,7 +157,9 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                         _LOGGER.error(f"Found {len(json_day['consumptionValues'])} consumption values for {current_date}")
                                         if json_day['consumptionValues']:
                                             # Process all consumption values for this day
+                                            day_statistics = []
                                             day_count = 0
+
                                             for d in json_day['consumptionValues']:
                                                 # Parse the date - API returns like "2025-09-01T00:00:00"
                                                 from_time = dt_util.parse_datetime(d['date'])
@@ -171,7 +172,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                                     from_time = dt_util.as_local(from_time)
                                                 keepSum += d['consumption']
 
-                                                all_statistics.append(
+                                                day_statistics.append(
                                                     StatisticData(
                                                         start=from_time,
                                                         state=d['consumption'],
@@ -180,7 +181,13 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                                 )
                                                 day_count += 1
 
-                                            _LOGGER.error(f"Added {day_count} values for {current_date} (total: {len(all_statistics)})")
+                                            # Write this day's statistics to database immediately
+                                            if day_statistics:
+                                                await get_instance(self.hass).async_add_executor_job(
+                                                    async_add_external_statistics, self.hass, metadata, day_statistics
+                                                )
+                                                total_processed += day_count
+                                                _LOGGER.error(f"Wrote {day_count} values for {current_date} to database (total processed: {total_processed})")
                                         else:
                                             _LOGGER.warning(f"consumptionValues is empty for {current_date}")
                                     else:
@@ -195,17 +202,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         # Add a small delay to avoid overwhelming the API
                         await asyncio.sleep(0.5)
 
-                    # Add all statistics in one batch
-                    _LOGGER.error(f"Total statistics collected: {len(all_statistics)}")
-                    if all_statistics:
-                        _LOGGER.info(f"Adding {len(all_statistics)} historical statistics to database")
-                        await get_instance(self.hass).async_add_executor_job(
-                            async_add_external_statistics, self.hass, metadata, all_statistics
-                        )
-                    else:
-                        _LOGGER.error("No historical statistics to add")
-
-                    _LOGGER.error(f"Historical data load completed")
+                    _LOGGER.error(f"Historical data load completed - total processed: {total_processed}")
 
         except asyncio.TimeoutError:
             _LOGGER.error("Timeout while loading historical data")
