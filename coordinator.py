@@ -105,7 +105,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     statistic_id = "bjarekraft:grid_consumption"
                     keepSum = 0
 
-                    # Fetch all data from beginning of year, day by day
+                    # Fetch all data from beginning of year
                     #start_date = datetime(datetime.now().year, 1, 1)
                     start_date = datetime.now() - timedelta(days=30)
                     end_date = datetime.now()
@@ -124,26 +124,35 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     # Collect all statistics in one list to add them in chronological order
                     all_statistics = []
 
-                    current_date = start_date
-                    _LOGGER.error(f"Current_date{current_date}")
+                    # Fetch historical data day by day (API requires dates to be on same day)
+                    _LOGGER.error(f"Fetching historical data from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
 
-                    while current_date <= end_date:
-                        _LOGGER.error(f"Current_date{current_date}")
-                        _LOGGER.error(f"Enddate {end_date}")
+                    current_date = start_date.date() if hasattr(start_date, 'date') else start_date
+                    end = end_date.date() if hasattr(end_date, 'date') else end_date
 
-                        dateLower = current_date
-                        dateUpper = current_date
-                        url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
-                        _LOGGER.error(f"Loading historical data for {current_date.strftime('%Y-%m-%d')} {random.randint(0, 1000)}")
-                        _LOGGER.error(url)
+                    while current_date <= end:
+                        # Use start of day (00:00) and end of day (23:59) for the same date
+                        dateLower = datetime.combine(current_date, datetime.min.time())
+                        dateUpper = datetime.combine(current_date, datetime.max.time().replace(microsecond=0))
+
+                        # API expects format like "2025-01-01" for both dates
+                        url = BASE_URL + UTILITY_ID + "/BJR/1/" + current_date.strftime("%Y-%m-%d") + "/" + current_date.strftime("%Y-%m-%d") + "/1/1"
+                        _LOGGER.debug(f"Fetching data for {current_date.strftime('%Y-%m-%d')}")
 
                         try:
                             async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
                                 if response.status == 200:
-                                    json_day = await response.json()
-                                    _LOGGER.error(f"Response keys: {json_day.keys() if json_day else 'None'}")
+                                    response_text = await response.text()
+                                    _LOGGER.debug(f"Response length for {current_date}: {len(response_text)} chars")
+
+                                    # Parse JSON from text
+                                    import json as json_module
+                                    json_day = json_module.loads(response_text)
+
+                                    _LOGGER.debug(f"Response keys: {list(json_day.keys()) if json_day else 'None'}")
+
                                     if 'consumptionValues' in json_day:
-                                        _LOGGER.error(f"Found {len(json_day['consumptionValues'])} consumption values for {current_date.strftime('%Y-%m-%d')}")
+                                        _LOGGER.debug(f"Found {len(json_day['consumptionValues'])} consumption values for {current_date}")
                                         if json_day['consumptionValues']:
                                             # Process all consumption values for this day
                                             day_count = 0
@@ -164,19 +173,20 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                                 )
                                                 day_count += 1
 
-                                            _LOGGER.error(f"Added {day_count} values to all_statistics (total now: {len(all_statistics)})")
+                                            _LOGGER.debug(f"Added {day_count} values for {current_date} (total: {len(all_statistics)})")
                                         else:
-                                            _LOGGER.error(f"consumptionValues is empty for {current_date.strftime('%Y-%m-%d')}")
+                                            _LOGGER.warning(f"consumptionValues is empty for {current_date}")
                                     else:
-                                        _LOGGER.error(f"No consumptionValues key in response for {current_date.strftime('%Y-%m-%d')}")
+                                        _LOGGER.warning(f"No consumptionValues key in response for {current_date}")
                                 else:
-                                    _LOGGER.error(f"API returned status {response.status} for {current_date.strftime('%Y-%m-%d')}")
+                                    _LOGGER.error(f"API returned status {response.status} for {current_date}")
                         except Exception as e:
-                            _LOGGER.error(f"Failed to fetch historical data for {current_date.strftime('%Y-%m-%d')}: {e}")
+                            _LOGGER.error(f"Failed to fetch historical data for {current_date}: {e}")
 
-                        current_date += timedelta(days=1)
-                        # Add a delay to avoid overwhelming the API - rate limit to prevent timeout
-                        await asyncio.sleep(1.0)  # 1 second delay between requests
+                        # Move to next day (current_date is a date object)
+                        current_date = current_date + timedelta(days=1)
+                        # Add a small delay to avoid overwhelming the API
+                        await asyncio.sleep(0.5)
 
                     # Add all statistics in one batch
                     _LOGGER.error(f"Total statistics collected: {len(all_statistics)}")
