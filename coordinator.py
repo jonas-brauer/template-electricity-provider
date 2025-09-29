@@ -94,7 +94,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
     async def _load_historical_data(self):
         """Load all historical data from beginning of year."""
         try:
-            async with async_timeout.timeout(600):  # 10 minute timeout for initial load
+            async with async_timeout.timeout(1200):  # 20 minute timeout for initial load
                 headers = {
                     "Authorization": "Bearer " + CONF_TOKEN,
                     "User-Agent": "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
@@ -106,8 +106,8 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     keepSum = 0
 
                     # Fetch all data from beginning of year
-                    #start_date = datetime(datetime.now().year, 1, 1)
-                    start_date = datetime.now() - timedelta(days=30)
+                    start_date = datetime(datetime.now().year, 1, 1)
+                    #start_date = datetime.now() - timedelta(days=30)
                     end_date = datetime.now()
                     
 
@@ -270,7 +270,11 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     all_recent_data = []
 
                     for fetch_date in [yesterday, today]:
-                        url = BASE_URL + UTILITY_ID + "/BJR/1/" + fetch_date.strftime("%Y-%m-%d") + "/" + fetch_date.strftime("%Y-%m-%d") + "/1/1"
+                        dateLower = datetime.combine(fetch_date, datetime.min.time())
+                        dateUpper = datetime.combine(fetch_date, datetime.max.time().replace(microsecond=0)) + timedelta(days=1)
+
+                        # API expects format like "2025-01-01" for both dates
+                        url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
                         _LOGGER.debug(f"Fetching recent data for {fetch_date}")
 
                         try:
