@@ -151,6 +151,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                                     _LOGGER.error(f"Response keys: {list(json_day.keys()) if json_day else 'None'}")
                                     _LOGGER.error(f"Response: {json_day}")
+                                    _LOGGER.err(f"{json_data['consumptionValues']}")
 
                                     if 'consumptionValues' in json_day:
                                         _LOGGER.error(f"Found {len(json_day['consumptionValues'])} consumption values for {current_date}")
