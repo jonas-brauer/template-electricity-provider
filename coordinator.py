@@ -260,13 +260,12 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                 last_timestamp = last_stats[statistic_id][0]["start"]
 
                     # Regular update - fetch recent data day by day (API requires same day)
-                    # Fetch yesterday and today
+                    # Only fetch today's data - yesterday should already be in database
                     today = datetime.now().date()
-                    yesterday = today - timedelta(days=1)
 
                     all_recent_data = []
 
-                    for fetch_date in [yesterday, today]:
+                    for fetch_date in [today]:
                         dateLower = datetime.combine(fetch_date, datetime.min.time())
                         dateUpper = datetime.combine(fetch_date, datetime.max.time().replace(microsecond=0)) + timedelta(days=1)
 
