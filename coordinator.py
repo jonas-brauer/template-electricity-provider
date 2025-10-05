@@ -81,7 +81,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
         # Check if we have existing statistics
         last_stats = await get_instance(self.hass).async_add_executor_job(
-            get_last_statistics, self.hass, 1, statistic_id, True, set()
+            get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
         )
 
         # Only load historical data if this is first setup (no existing statistics)
@@ -106,7 +106,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                     # Check for existing statistics to continue from where we left off
                     last_stats = await get_instance(self.hass).async_add_executor_job(
-                        get_last_statistics, self.hass, 1, statistic_id, True, set()
+                        get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
                     )
 
                     keepSum = 0
@@ -256,7 +256,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                     # Get the last statistics to continue from where we left off
                     last_stats = await get_instance(self.hass).async_add_executor_job(
-                        get_last_statistics, self.hass, 1, statistic_id, True, set()
+                        get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
                     )
 
                     # If no previous data exists, load historical data first
@@ -266,7 +266,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                         # Get the updated last statistics after loading historical data
                         last_stats = await get_instance(self.hass).async_add_executor_job(
-                            get_last_statistics, self.hass, 1, statistic_id, True, set()
+                            get_last_statistics, self.hass, 1, statistic_id, True, {"sum"}
                         )
 
                     keepSum = 0
