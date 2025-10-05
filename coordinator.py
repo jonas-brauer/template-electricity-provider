@@ -99,15 +99,30 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     "Authorization": "Bearer " + CONF_TOKEN,
                     "User-Agent": "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
                 }
-                
+
 
                 async with aiohttp.ClientSession(headers=headers) as session:
                     statistic_id = "bjarekraft:grid_consumption"
-                    keepSum = 0
 
-                    # Fetch all data from beginning of year
+                    # Check for existing statistics to continue from where we left off
+                    last_stats = await get_instance(self.hass).async_add_executor_job(
+                        get_last_statistics, self.hass, 1, statistic_id, True, set()
+                    )
+
+                    keepSum = 0
                     start_date = datetime(datetime.now().year, 1, 1)
-                    #start_date = datetime.now() - timedelta(days=30)
+
+                    # If we have existing data, start from there
+                    if last_stats and statistic_id in last_stats and last_stats[statistic_id]:
+                        if "sum" in last_stats[statistic_id][0]:
+                            keepSum = last_stats[statistic_id][0]["sum"] or 0
+                        if "start" in last_stats[statistic_id][0]:
+                            last_timestamp = last_stats[statistic_id][0]["start"]
+                            # Start from the day after the last timestamp
+                            start_date = datetime.fromtimestamp(last_timestamp).date() + timedelta(days=1)
+                            start_date = datetime.combine(start_date, datetime.min.time())
+                            _LOGGER.info(f"Continuing from existing data - last sum: {keepSum}, starting from: {start_date}")
+
                     end_date = datetime.now()
                     
 
@@ -161,6 +176,11 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                             day_count = 0
 
                                             for d in json_day['consumptionValues']:
+                                                # Skip data points with non-zero status (incomplete/unavailable data)
+                                                # Status 0 = valid data, status 4 = not yet available
+                                                if d.get('status', 0) != 0:
+                                                    continue
+
                                                 # Parse the date - API returns like "2025-09-01T00:00:00"
                                                 from_time = dt_util.parse_datetime(d['date'])
                                                 if from_time is None:
@@ -288,6 +308,12 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     # Process only new data points
                     for d in all_recent_data:
                         statistics = []
+
+                        # Skip data points with non-zero status (incomplete/unavailable data)
+                        # Status 0 = valid data, status 4 = not yet available
+                        if d.get('status', 0) != 0:
+                            continue
+
                         # Parse the date - API returns like "2025-09-01T00:00:00"
                         from_time = dt_util.parse_datetime(d['date'])
                         if from_time is None:
