@@ -306,12 +306,14 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                             _LOGGER.error(f"Failed to fetch recent data for {fetch_date}: {e}")
 
                     # Process only new data points
-                    for d in all_recent_data:
-                        statistics = []
+                    statistics = []
+                    _LOGGER.info(f"Processing {len(all_recent_data)} data points from API, starting from keepSum={keepSum}, last_timestamp={last_timestamp}")
 
+                    for d in all_recent_data:
                         # Skip data points with non-zero status (incomplete/unavailable data)
                         # Status 0 = valid data, status 4 = not yet available
                         if d.get('status', 0) != 0:
+                            _LOGGER.debug(f"Skipping data point with status {d.get('status')}")
                             continue
 
                         # Parse the date - API returns like "2025-09-01T00:00:00"
@@ -327,6 +329,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         # Skip data points that are already stored (older than or equal to last timestamp)
                         # Convert datetime to timestamp for comparison (last_timestamp is a float)
                         if last_timestamp and from_time.timestamp() <= last_timestamp:
+                            _LOGGER.debug(f"Skipping already stored data point: {d['date']} (timestamp: {from_time.timestamp()} <= {last_timestamp})")
                             continue
 
                         keepSum += d['consumption']
@@ -338,20 +341,24 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                 sum=keepSum,
                             )
                         )
+                        _LOGGER.debug(f"Added data point: date={d['date']}, consumption={d['consumption']}, new sum={keepSum}")
 
-                        # Only add statistics if we have new data to add
-                        if statistics:
-                            metadata = StatisticMetaData(
-                                    mean_type=StatisticMeanType.NONE,
-                                    has_sum=True,
-                                    name=f"1",
-                                    source="bjarekraft",
-                                    statistic_id=statistic_id,
-                                    unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-                                )
-                            await get_instance(self.hass).async_add_executor_job(
-                                async_add_external_statistics, self.hass, metadata, statistics
+                    # Only add statistics if we have new data to add
+                    if statistics:
+                        _LOGGER.info(f"Writing {len(statistics)} new statistics to database (final sum: {keepSum})")
+                        metadata = StatisticMetaData(
+                                mean_type=StatisticMeanType.NONE,
+                                has_sum=True,
+                                name=f"1",
+                                source="bjarekraft",
+                                statistic_id=statistic_id,
+                                unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
                             )
+                        await get_instance(self.hass).async_add_executor_job(
+                            async_add_external_statistics, self.hass, metadata, statistics
+                        )
+                    else:
+                        _LOGGER.info("No new statistics to add")
 
                 return json_data
                 # return await self.my_api.fetch_data(listening_idx)
