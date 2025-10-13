@@ -279,19 +279,22 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                             if "start" in last_stats[statistic_id][0]:
                                 last_timestamp = last_stats[statistic_id][0]["start"]
 
-                    # Regular update - fetch recent data day by day (API requires same day)
-                    # Only fetch today's data - yesterday should already be in database
+                    # Regular update - fetch recent data for validation
+                    # Fetch last 3 days to catch any retroactive changes in the API
                     today = datetime.now().date()
+                    start_fetch_date = today - timedelta(days=2)  # Fetch last 3 days including today
 
                     all_recent_data = []
 
-                    for fetch_date in [today]:
-                        dateLower = datetime.combine(fetch_date, datetime.min.time())
-                        dateUpper = datetime.combine(fetch_date, datetime.max.time().replace(microsecond=0)) + timedelta(days=1)
+                    # Fetch data for the last few days
+                    current_fetch = start_fetch_date
+                    while current_fetch <= today:
+                        dateLower = datetime.combine(current_fetch, datetime.min.time())
+                        dateUpper = datetime.combine(current_fetch, datetime.max.time().replace(microsecond=0)) + timedelta(days=1)
 
                         # API expects format like "2025-01-01" for both dates
                         url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
-                        _LOGGER.debug(f"Fetching recent data for {fetch_date}")
+                        _LOGGER.debug(f"Fetching recent data for {current_fetch}")
 
                         try:
                             async with session.get(url) as response:
@@ -299,23 +302,83 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                     json_data = await response.json()
                                     if 'consumptionValues' in json_data and json_data['consumptionValues']:
                                         all_recent_data.extend(json_data['consumptionValues'])
-                                        _LOGGER.debug(f"Found {len(json_data['consumptionValues'])} values for {fetch_date}")
+                                        _LOGGER.debug(f"Found {len(json_data['consumptionValues'])} values for {current_fetch}")
                                 else:
-                                    _LOGGER.warning(f"API returned status {response.status} for {fetch_date}")
+                                    _LOGGER.warning(f"API returned status {response.status} for {current_fetch}")
                         except Exception as e:
-                            _LOGGER.error(f"Failed to fetch recent data for {fetch_date}: {e}")
+                            _LOGGER.error(f"Failed to fetch recent data for {current_fetch}: {e}")
 
-                    # Process only new data points
+                        current_fetch += timedelta(days=1)
+
+                    # Get existing statistics for the period to compare
+                    start_ts = dt_util.as_local(datetime.combine(start_fetch_date, datetime.min.time())).timestamp()
+                    end_ts = dt_util.as_local(datetime.combine(today, datetime.max.time())).timestamp()
+
+                    existing_stats = await get_instance(self.hass).async_add_executor_job(
+                        statistics_during_period,
+                        self.hass,
+                        start_ts,
+                        end_ts,
+                        {statistic_id},
+                        "hour",
+                        None,
+                        {"sum", "state"}
+                    )
+
+                    # Create a dict of existing statistics by timestamp for quick lookup
+                    existing_stats_map = {}
+                    if statistic_id in existing_stats:
+                        for stat in existing_stats[statistic_id]:
+                            existing_stats_map[stat['start']] = stat
+
+                    # Process data points - both new and potentially changed existing ones
                     statistics = []
-                    _LOGGER.info(f"Processing {len(all_recent_data)} data points from API, starting from keepSum={keepSum}, last_timestamp={last_timestamp}")
+                    updates_count = 0
+                    new_count = 0
 
-                    for d in all_recent_data:
-                        # Skip data points with non-zero status (incomplete/unavailable data)
-                        # Status 0 = valid data, status 4 = not yet available
-                        if d.get('status', 0) != 0:
-                            _LOGGER.debug(f"Skipping data point with status {d.get('status')}")
-                            continue
+                    # Sort all_recent_data by date to process in chronological order
+                    all_recent_data_sorted = sorted(
+                        [d for d in all_recent_data if d.get('status', 0) == 0],
+                        key=lambda x: dt_util.parse_datetime(x['date']) or datetime.min
+                    )
 
+                    _LOGGER.info(f"Processing {len(all_recent_data_sorted)} valid data points from API (filtered {len(all_recent_data) - len(all_recent_data_sorted)} with non-zero status)")
+
+                    # Find the earliest point in the fetched data
+                    earliest_timestamp = None
+                    if all_recent_data_sorted:
+                        earliest_dt = dt_util.parse_datetime(all_recent_data_sorted[0]['date'])
+                        if earliest_dt:
+                            if earliest_dt.tzinfo is None:
+                                earliest_dt = dt_util.as_local(earliest_dt)
+                            earliest_timestamp = earliest_dt.timestamp()
+
+                    # Get the sum just before the earliest fetched data point
+                    # This is our starting point for recalculation
+                    if earliest_timestamp:
+                        # Get statistics just before our fetch period to get the correct starting sum
+                        pre_period_stats = await get_instance(self.hass).async_add_executor_job(
+                            statistics_during_period,
+                            self.hass,
+                            0,
+                            earliest_timestamp - 1,
+                            {statistic_id},
+                            "hour",
+                            None,
+                            {"sum"}
+                        )
+
+                        if statistic_id in pre_period_stats and pre_period_stats[statistic_id]:
+                            # Get the last sum before our period
+                            keepSum = pre_period_stats[statistic_id][-1].get('sum', 0) or 0
+                            _LOGGER.info(f"Starting recalculation from sum={keepSum} at timestamp {earliest_timestamp}")
+                        else:
+                            keepSum = 0
+                            _LOGGER.info(f"No previous statistics found, starting from sum=0")
+                    else:
+                        _LOGGER.warning("Could not determine earliest timestamp, using keepSum from last_stats")
+
+                    for d in all_recent_data_sorted:
                         # Parse the date - API returns like "2025-09-01T00:00:00"
                         from_time = dt_util.parse_datetime(d['date'])
                         if from_time is None:
@@ -326,13 +389,19 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         if from_time.tzinfo is None:
                             from_time = dt_util.as_local(from_time)
 
-                        # Skip data points that are already stored (older than or equal to last timestamp)
-                        # Convert datetime to timestamp for comparison (last_timestamp is a float)
-                        if last_timestamp and from_time.timestamp() <= last_timestamp:
-                            _LOGGER.debug(f"Skipping already stored data point: {d['date']} (timestamp: {from_time.timestamp()} <= {last_timestamp})")
-                            continue
-
+                        ts = from_time.timestamp()
                         keepSum += d['consumption']
+
+                        # Check if this data point exists and if the value has changed
+                        if ts in existing_stats_map:
+                            existing_state = existing_stats_map[ts].get('state', 0) or 0
+                            if abs(existing_state - d['consumption']) > 0.0001:  # Allow for floating point errors
+                                _LOGGER.info(f"Value changed for {d['date']}: {existing_state} -> {d['consumption']} (diff: {d['consumption'] - existing_state})")
+                                updates_count += 1
+                            # Always include existing points in the recalculation
+                        else:
+                            _LOGGER.debug(f"New data point: date={d['date']}, consumption={d['consumption']}")
+                            new_count += 1
 
                         statistics.append(
                             StatisticData(
@@ -341,7 +410,8 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                 sum=keepSum,
                             )
                         )
-                        _LOGGER.debug(f"Added data point: date={d['date']}, consumption={d['consumption']}, new sum={keepSum}")
+
+                    _LOGGER.info(f"Found {new_count} new data points and {updates_count} updates in {len(statistics)} total points")
 
                     # Only add statistics if we have new data to add
                     if statistics:
