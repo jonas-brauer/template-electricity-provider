@@ -413,9 +413,9 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                     _LOGGER.info(f"Found {new_count} new data points and {updates_count} updates in {len(statistics)} total points")
 
-                    # Only add statistics if we have new data to add
-                    if statistics:
-                        _LOGGER.info(f"Writing {len(statistics)} new statistics to database (final sum: {keepSum})")
+                    # Only add statistics if we have new or updated data
+                    if statistics and (new_count > 0 or updates_count > 0):
+                        _LOGGER.info(f"Writing {len(statistics)} statistics to database ({new_count} new, {updates_count} updates, final sum: {keepSum})")
                         metadata = StatisticMetaData(
                                 mean_type=StatisticMeanType.NONE,
                                 has_sum=True,
@@ -428,7 +428,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                             async_add_external_statistics, self.hass, metadata, statistics
                         )
                     else:
-                        _LOGGER.info("No new statistics to add")
+                        _LOGGER.info(f"No new or changed statistics to add (processed {len(statistics)} existing unchanged values)")
 
                 return json_data
                 # return await self.my_api.fetch_data(listening_idx)
