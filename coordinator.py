@@ -321,14 +321,14 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     _LOGGER.info(f"Total data points fetched from API: {len(all_recent_data)}")
 
                     # Get existing statistics for the period to compare
-                    start_ts = dt_util.as_local(datetime.combine(start_fetch_date, datetime.min.time())).timestamp()
-                    end_ts = dt_util.as_local(datetime.combine(today, datetime.max.time())).timestamp()
+                    start_dt = dt_util.as_local(datetime.combine(start_fetch_date, datetime.min.time()))
+                    end_dt = dt_util.as_local(datetime.combine(today, datetime.max.time()))
 
                     existing_stats = await get_instance(self.hass).async_add_executor_job(
                         statistics_during_period,
                         self.hass,
-                        start_ts,
-                        end_ts,
+                        start_dt,
+                        end_dt,
                         {statistic_id},
                         "hour",
                         None,
@@ -367,11 +367,17 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                     # This is our starting point for recalculation
                     if earliest_timestamp:
                         # Get statistics just before our fetch period to get the correct starting sum
+                        # Convert earliest_timestamp to datetime
+                        earliest_dt_calc = datetime.fromtimestamp(earliest_timestamp)
+                        if earliest_dt_calc.tzinfo is None:
+                            earliest_dt_calc = dt_util.as_local(earliest_dt_calc)
+
+                        # Get from beginning of time to just before earliest point
                         pre_period_stats = await get_instance(self.hass).async_add_executor_job(
                             statistics_during_period,
                             self.hass,
-                            0,
-                            earliest_timestamp - 1,
+                            datetime.fromtimestamp(0),  # Unix epoch
+                            earliest_dt_calc - timedelta(seconds=1),
                             {statistic_id},
                             "hour",
                             None,
