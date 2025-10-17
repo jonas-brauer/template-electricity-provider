@@ -288,27 +288,37 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
 
                     # Fetch data for the last few days
                     current_fetch = start_fetch_date
+                    _LOGGER.info(f"Fetching data from {start_fetch_date} to {today} (3 days)")
+
                     while current_fetch <= today:
                         dateLower = datetime.combine(current_fetch, datetime.min.time())
                         dateUpper = datetime.combine(current_fetch, datetime.max.time().replace(microsecond=0)) + timedelta(days=1)
 
                         # API expects format like "2025-01-01" for both dates
                         url = BASE_URL + UTILITY_ID + "/BJR/1/" + dateLower.strftime("%Y-%m-%d") + "/" + dateUpper.strftime("%Y-%m-%d") + "/1/1"
-                        _LOGGER.debug(f"Fetching recent data for {current_fetch}")
+                        _LOGGER.info(f"Fetching recent data for {current_fetch}, URL: {url}")
 
                         try:
                             async with session.get(url) as response:
+                                _LOGGER.info(f"API response status for {current_fetch}: {response.status}")
                                 if response.status == 200:
                                     json_data = await response.json()
+                                    _LOGGER.info(f"API response keys for {current_fetch}: {list(json_data.keys()) if json_data else 'None'}")
                                     if 'consumptionValues' in json_data and json_data['consumptionValues']:
                                         all_recent_data.extend(json_data['consumptionValues'])
-                                        _LOGGER.debug(f"Found {len(json_data['consumptionValues'])} values for {current_fetch}")
+                                        _LOGGER.info(f"Found {len(json_data['consumptionValues'])} values for {current_fetch}")
+                                    elif 'consumptionValues' in json_data:
+                                        _LOGGER.warning(f"consumptionValues exists but is empty for {current_fetch}")
+                                    else:
+                                        _LOGGER.warning(f"No consumptionValues in response for {current_fetch}")
                                 else:
                                     _LOGGER.warning(f"API returned status {response.status} for {current_fetch}")
                         except Exception as e:
-                            _LOGGER.error(f"Failed to fetch recent data for {current_fetch}: {e}")
+                            _LOGGER.error(f"Failed to fetch recent data for {current_fetch}: {e}", exc_info=True)
 
                         current_fetch += timedelta(days=1)
+
+                    _LOGGER.info(f"Total data points fetched from API: {len(all_recent_data)}")
 
                     # Get existing statistics for the period to compare
                     start_ts = dt_util.as_local(datetime.combine(start_fetch_date, datetime.min.time())).timestamp()
