@@ -33,10 +33,11 @@ from homeassistant.components.recorder.statistics import (
 
 from homeassistant.const import (
     UnitOfTemperature,
-    UnitOfEnergy
+    UnitOfEnergy,
+    CONF_PASSWORD,
 )
 from homeassistant.util import dt as dt_util
-from .const import DOMAIN, CONF_TOKEN, UTILITY_ID, BASE_URL
+from .const import DOMAIN, CONF_KUNDNUMMER, UTILITY_ID, BASE_URL
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -95,13 +96,16 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
         """Load all historical data from beginning of year."""
         try:
             async with async_timeout.timeout(1200):  # 20 minute timeout for initial load
+                # Get credentials from config entry
+                kundnummer = self.config_entry.data[CONF_KUNDNUMMER]
+                password = self.config_entry.data[CONF_PASSWORD]
+
                 headers = {
-                    "Authorization": "Bearer " + CONF_TOKEN,
                     "User-Agent": "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
                 }
 
-
-                async with aiohttp.ClientSession(headers=headers) as session:
+                auth = aiohttp.BasicAuth(kundnummer, password)
+                async with aiohttp.ClientSession(headers=headers, auth=auth) as session:
                     statistic_id = "bjarekraft:grid_consumption"
 
                     # Check for existing statistics to continue from where we left off
@@ -247,11 +251,17 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                 # Note: using context is not required if there is no need or ability to limit
                 # data retrieved from API.
                 listening_idx = set(self.async_contexts())
+
+                # Get credentials from config entry
+                kundnummer = self.config_entry.data[CONF_KUNDNUMMER]
+                password = self.config_entry.data[CONF_PASSWORD]
+
                 headers = {
-                    "Authorization": "Bearer " + CONF_TOKEN,
                     "User-Agent": "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
                 }
-                async with aiohttp.ClientSession(headers=headers) as session:
+
+                auth = aiohttp.BasicAuth(kundnummer, password)
+                async with aiohttp.ClientSession(headers=headers, auth=auth) as session:
                     statistic_id = "bjarekraft:grid_consumption"
 
                     # Get the last statistics to continue from where we left off

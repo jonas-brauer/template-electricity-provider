@@ -1,6 +1,6 @@
 """Constants for the integration."""
 
 DOMAIN = ""
-CONF_TOKEN = ""
+CONF_KUNDNUMMER = "kundnummer"
 UTILITY_ID = ""
 BASE_URL = ""

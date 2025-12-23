@@ -8,18 +8,19 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
-from homeassistant.const import CONF_TOKEN
+from homeassistant.const import CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_KUNDNUMMER
 
 _LOGGER = logging.getLogger(__name__)
 
 # TODO adjust the data schema to the data that you need
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_TOKEN): str,
+        vol.Required(CONF_KUNDNUMMER): str,
+        vol.Required(CONF_PASSWORD): str,
     }
 )
 
@@ -52,7 +53,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     #     your_validate_func, data[CONF_USERNAME], data[CONF_PASSWORD]
     # )
 
-    hub = PlaceholderHub(data[CONF_TOKEN])
+    hub = PlaceholderHub(data[CONF_KUNDNUMMER])
 
     # if not await hub.authenticate(data[CONF_USERNAME], data[CONF_PASSWORD]):
     #     raise InvalidAuth
