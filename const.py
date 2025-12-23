@@ -1,6 +1,6 @@
 """Constants for the integration."""
 
-DOMAIN = ""
+DOMAIN = "bjarekraft"
 CONF_KUNDNUMMER = "kundnummer"
 UTILITY_ID = ""
 BASE_URL = ""

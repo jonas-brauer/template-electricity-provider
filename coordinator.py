@@ -138,6 +138,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                         source="bjarekraft",
                         statistic_id=statistic_id,
                         unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                        unit_class="energy",
                     )
 
                     # Fetch historical data day by day (API requires dates to be on same day)
@@ -449,6 +450,7 @@ class BjarekraftCoordinator(DataUpdateCoordinator):
                                 source="bjarekraft",
                                 statistic_id=statistic_id,
                                 unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                                unit_class="energy",
                             )
                         await get_instance(self.hass).async_add_executor_job(
                             async_add_external_statistics, self.hass, metadata, statistics
